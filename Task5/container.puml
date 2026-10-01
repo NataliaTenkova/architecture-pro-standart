@@ -1,0 +1,73 @@
+@startuml containers
+!include <C4/C4_Container.puml>
+
+LAYOUT_WITH_LEGEND()
+
+' Персона
+Person(user,  "Клиент (не идентифицированный)", "Просматривает кредитные предложения, подает заявку")
+Person(user2, "Клиент (идентифицированный)", "Просматривает кредитные и предодобренные предложения, подает и подтверждает заявку")
+Person(user3, "Менеджер фронт-офиса", "Идентифицирует клиента, подпет заявку или продолжает работать по предзаполненной")
+Person(user4, "Менеджер бэк-офиса по кредитованию", "Обработка заявок на кредит")
+
+System_Boundary(standart, "MVP Открытие кредитов онлайн") {
+ 
+    ' Системы
+    Container(website, "Сайт", "php, React.js (собственная разработка)", "Сайт компании, отображение списка кредитных предложений с актуальными ставками")
+    Container(internet_bank, "Интернет-банк", "ASP.NET, .NET Framework 4.5 (Платформа подрядчика)", "Аутентификация пользователей, отображение списка кредитных предложений и предодобренных предложений")
+    Container(abs, "АБС", "Delphi (собственная разработка)", "Основная система. Ведет учёт операций по счетам и бухгалтерию")
+    Container(credit, "Кредитный конвеер", "Java (BPM-система Camunda)", "Обработка заявок на кредит")
+    Container(scoring, "Система кредитного скоринга", "Python", "Оценка кредитного потенциала клиентов")
+    Container(credit_request, "Система по кредитным заявкам", "React, Java", "Данные по онлайн заявкам и предодобренным предложениям")
+    Container(prescoring, "ETL-сервис расчета предодобренных предложений", "Python/Java", "Формирование предодобренных предложений")
+    
+    ' СМС шлюз 
+    Container(sms, "СМС-шлюз", "", "Передача данных телеком-оператору")
+    
+    ' Базы данных
+    ContainerDb(db_internet_bank, "Интернет-банк БД", "MS SQL")
+    ContainerDb(db_abs, "АБС БД", "Oracle")
+    ContainerDb(db_credit, "Кредитный конвеер БД", "Oracle")
+    ContainerDb(db_scoring, "Система кредитного скоринга БД", "PostgreSQL")
+    ContainerDb(db_credit_request, "Система по кредитным заявкам БД", "PostgreSQL")
+}
+
+' Внешние системы
+System_Ext(telecom, "Телеком-оператор", "Отправляет смс клиенту")
+System_Ext(bkh, "Бюро кредитных историй", "Хранит общие сведения по кредитованию клиента")
+
+' === Взаимодействие пользователей ===
+Rel(user, website, "Подача заявки на кредит через сайт")
+Rel(user2, internet_bank, "Подача и подтверждение заявки на кредит через интернет-банк")
+Rel(user3, abs, "Идентификация клиента, загрузка документов")
+Rel(user3, credit_request, "Создание заявки на кредит")
+Rel(user4, scoring, "Обработка онлайн заявки")
+
+' === Синхронные вызовы между сервисами ===
+Rel(website, credit_request, "Создание заявки (в т.ч. предодобренной по паспортным данным)", "REST API/Sync")
+Rel(website, scoring, "Запрос оценки клиента", "REST API/Sync")
+Rel(internet_bank, credit_request, "Запрос предодобренных предложений", "REST API/Sync")
+Rel(internet_bank, credit_request, "Создание заявки", "REST API/Sync")
+Rel(internet_bank, sms, "Отправка смс для подтверждения операции", "REST API/Sync")
+Rel(credit_request, credit, "Создание заявки", "REST API/Sync")
+Rel(credit_request, abs, "Создание согласованной заявки для проведения платежа", "JDBC Вызов хранимой процедуры/функции")
+Rel(credit_request, sms, "Отправка смс о приглашении в офис/об изменении статуса", "REST API/Sync")
+Rel(credit, credit_request, "Передача статуса заявки", "REST API/Sync")
+Rel(credit, scoring, "Передача данных о клиентах (1 раз в сутки для расчета скоринга)", "REST API/Sync")
+Rel(credit, scoring, "Запрос данных о клиенте (онлайн)", "REST API/Sync")
+Rel(scoring, bkh, "Запрос данных о клиенте", "REST API/Sync")
+Rel(prescoring, scoring, "Запрос данных о клиенте (ночное время)", "REST API/Sync")
+Rel(prescoring, credit_request, "Создание предодобренного предложения", "REST API/Sync")
+
+' === Интеграция с внешними системами ===
+Rel(sms, telecom, "Отправка смс")
+
+' === Асинхронное взаимодействие ===
+
+' === Взаимодействие с БД ===
+Rel(internet_bank, db_internet_bank, "Чтение/запись", "SQL")
+Rel(abs, db_abs, "Чтение/запись", "SQL")
+Rel(credit, db_credit, "Чтение/запись", "SQL")
+Rel(credit_request, db_credit_request, "Чтение/запись", "SQL")
+Rel(scoring, db_scoring, "Чтение/запись", "SQL")
+
+@enduml
